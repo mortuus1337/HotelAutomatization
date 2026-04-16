@@ -1,7 +1,4 @@
-﻿using Hotel.Domain.Guests;
-using Hotel.Domain.Identity;
-using Hotel.Domain.Reservations;
-using Hotel.Domain.Rooms;
+﻿using Hotel.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hotel.Infrastructure.Persistence;
@@ -22,6 +19,8 @@ public class HotelDbContext : DbContext
     public DbSet<ReservationRoom> ReservationRooms => Set<ReservationRoom>();
     public DbSet<Stay> Stays => Set<Stay>();
     public DbSet<StayGuest> StayGuests => Set<StayGuest>();
+    public DbSet<StayOperation> StayOperations => Set<StayOperation>();
+    public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

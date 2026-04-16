@@ -1,4 +1,4 @@
-﻿using Hotel.Domain.Guests;
+﻿using Hotel.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,28 +12,13 @@ public class GuestConfiguration : IEntityTypeConfiguration<Guest>
 
         builder.HasKey(x => x.GuestId);
 
-        builder.Property(x => x.GuestId)
-            .HasColumnName("guest_id");
-
-        builder.Property(x => x.LastName)
-            .HasColumnName("last_name")
-            .IsRequired();
-
-        builder.Property(x => x.FirstName)
-            .HasColumnName("first_name")
-            .IsRequired();
-
-        builder.Property(x => x.MiddleName)
-            .HasColumnName("middle_name");
-
-        builder.Property(x => x.Phone)
-            .HasColumnName("phone");
-
-        builder.Property(x => x.Email)
-            .HasColumnName("email");
-
-        builder.Property(x => x.CreatedAt)
-            .HasColumnName("created_at");
+        builder.Property(x => x.GuestId).HasColumnName("guest_id");
+        builder.Property(x => x.LastName).HasColumnName("last_name");
+        builder.Property(x => x.FirstName).HasColumnName("first_name");
+        builder.Property(x => x.MiddleName).HasColumnName("middle_name");
+        builder.Property(x => x.Phone).HasColumnName("phone");
+        builder.Property(x => x.Email).HasColumnName("email");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at");
 
         builder.HasOne(x => x.GuestIdentity)
             .WithOne(x => x.Guest)

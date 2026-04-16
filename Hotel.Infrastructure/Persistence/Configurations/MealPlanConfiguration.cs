@@ -1,4 +1,4 @@
-﻿using Hotel.Domain.Reservations;
+﻿using Hotel.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,21 +12,8 @@ public class MealPlanConfiguration : IEntityTypeConfiguration<MealPlan>
 
         builder.HasKey(x => x.MealPlanId);
 
-        builder.Property(x => x.MealPlanId)
-            .HasColumnName("meal_plan_id");
-
-        builder.Property(x => x.Name)
-            .HasColumnName("name")
-            .IsRequired();
-
-        builder.Property(x => x.PricePerPersonPerDay)
-            .HasColumnName("price_per_person_per_day")
-            .HasPrecision(12, 2)
-            .IsRequired();
-
-        builder.HasIndex(x => x.Name)
-            .IsUnique();
-
-        builder.HasCheckConstraint("ck_meal_plan_price_positive", "\"price_per_person_per_day\" >= 0");
+        builder.Property(x => x.MealPlanId).HasColumnName("meal_plan_id");
+        builder.Property(x => x.Name).HasColumnName("name");
+        builder.Property(x => x.PricePerPersonPerDay).HasColumnName("price_per_person_per_day");
     }
 }

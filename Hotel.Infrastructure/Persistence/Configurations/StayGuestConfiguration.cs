@@ -1,4 +1,4 @@
-﻿using Hotel.Domain.Reservations;
+﻿using Hotel.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,21 +12,18 @@ public class StayGuestConfiguration : IEntityTypeConfiguration<StayGuest>
 
         builder.HasKey(x => new { x.StayId, x.GuestId });
 
-        builder.Property(x => x.StayId)
-            .HasColumnName("stay_id");
-
-        builder.Property(x => x.GuestId)
-            .HasColumnName("guest_id");
-
-        builder.Property(x => x.IsMain)
-            .HasColumnName("is_main");
+        builder.Property(x => x.StayId).HasColumnName("stay_id");
+        builder.Property(x => x.GuestId).HasColumnName("guest_id");
+        builder.Property(x => x.IsMain).HasColumnName("is_main");
 
         builder.HasOne(x => x.Stay)
-            .WithMany(x => x.Guests)
-            .HasForeignKey(x => x.StayId);
+            .WithMany(x => x.StayGuests)
+            .HasForeignKey(x => x.StayId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(x => x.Guest)
-            .WithMany()
-            .HasForeignKey(x => x.GuestId);
+            .WithMany(x => x.StayGuests)
+            .HasForeignKey(x => x.GuestId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

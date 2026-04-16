@@ -10,6 +10,10 @@ namespace Hotel.Infrastructure.Services;
 
 public class StayService : IStayService
 {
+    private const string OperationCheckIn = "CheckIn";
+    private const string OperationCheckInByReservation = "CheckInByReservation";
+    private const string OperationCheckOut = "CheckOut";
+
     private readonly HotelDbContext _dbContext;
     private readonly IRoomAvailabilityService _roomAvailabilityService;
 
@@ -36,6 +40,57 @@ public class StayService : IStayService
                 Status = x.Status,
                 ActualCheckin = x.ActualCheckin,
                 PlannedCheckout = x.PlannedCheckout.ToDateTime(TimeOnly.MinValue),
+                Comment = x.Comment
+            })
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<StayOperationDto>> GetOperationsAsync(
+        DateTime? from,
+        DateTime? to,
+        int? userId,
+        CancellationToken cancellationToken = default)
+    {
+        var query = _dbContext.StayOperations
+            .AsNoTracking()
+            .Include(x => x.Stay)
+                .ThenInclude(x => x.Room)
+            .Include(x => x.User)
+            .AsQueryable();
+
+        if (from.HasValue)
+        {
+            var fromValue = from.Value.Date;
+            var fromUtc = fromValue.Kind == DateTimeKind.Utc
+                ? fromValue
+                : DateTime.SpecifyKind(fromValue, DateTimeKind.Utc);
+            query = query.Where(x => x.OccurredAt >= fromUtc);
+        }
+
+        if (to.HasValue)
+        {
+            var toValue = to.Value.Date.AddDays(1).AddTicks(-1);
+            var toUtc = toValue.Kind == DateTimeKind.Utc
+                ? toValue
+                : DateTime.SpecifyKind(toValue, DateTimeKind.Utc);
+            query = query.Where(x => x.OccurredAt <= toUtc);
+        }
+
+        if (userId.HasValue)
+            query = query.Where(x => x.UserId == userId.Value);
+
+        return await query
+            .OrderByDescending(x => x.OccurredAt)
+            .Select(x => new StayOperationDto
+            {
+                StayOperationId = x.StayOperationId,
+                StayId = x.StayId,
+                RoomId = x.Stay.RoomId,
+                RoomNumber = x.Stay.Room.RoomNumber,
+                UserId = x.UserId,
+                UserName = x.User.FullName,
+                OperationType = x.OperationType,
+                OccurredAt = x.OccurredAt,
                 Comment = x.Comment
             })
             .ToListAsync(cancellationToken);
@@ -131,6 +186,13 @@ public class StayService : IStayService
         _dbContext.StayGuests.AddRange(stayGuests);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await AddOperationAsync(
+            stay.StayId,
+            currentUserId,
+            OperationCheckIn,
+            request.Comment,
+            cancellationToken);
+
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }
 
@@ -183,10 +245,21 @@ public class StayService : IStayService
         reservation.Status = ReservationStatuses.CheckedIn;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        await AddOperationAsync(
+            stay.StayId,
+            currentUserId,
+            OperationCheckInByReservation,
+            request.Comment ?? reservation.Comment,
+            cancellationToken);
+
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }
 
-    public async Task<StayDto> CheckOutAsync(int stayId, CheckOutStayDto request, CancellationToken cancellationToken = default)
+    public async Task<StayDto> CheckOutAsync(
+        int stayId,
+        CheckOutStayDto request,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
     {
         var stay = await _dbContext.Stays
             .FirstOrDefaultAsync(x => x.StayId == stayId, cancellationToken);
@@ -204,6 +277,13 @@ public class StayService : IStayService
             stay.Comment = request.Comment;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await AddOperationAsync(
+            stay.StayId,
+            currentUserId,
+            OperationCheckOut,
+            request.Comment,
+            cancellationToken);
 
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }
@@ -351,5 +431,25 @@ public class StayService : IStayService
             missing.Add("адрес");
 
         return missing;
+    }
+
+    private async Task AddOperationAsync(
+        int stayId,
+        int userId,
+        string operationType,
+        string? comment,
+        CancellationToken cancellationToken)
+    {
+        var operation = new StayOperation
+        {
+            StayId = stayId,
+            UserId = userId,
+            OperationType = operationType,
+            OccurredAt = DateTimeOffset.UtcNow,
+            Comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim()
+        };
+
+        _dbContext.StayOperations.Add(operation);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

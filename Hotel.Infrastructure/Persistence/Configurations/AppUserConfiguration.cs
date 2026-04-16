@@ -1,4 +1,4 @@
-﻿using Hotel.Domain.Identity;
+﻿using Hotel.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,33 +12,14 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
 
         builder.HasKey(x => x.UserId);
 
-        builder.Property(x => x.UserId)
-            .HasColumnName("user_id");
+        builder.Property(x => x.UserId).HasColumnName("user_id");
+        builder.Property(x => x.Login).HasColumnName("login");
+        builder.Property(x => x.PasswordHash).HasColumnName("password_hash");
+        builder.Property(x => x.FullName).HasColumnName("full_name");
+        builder.Property(x => x.RoleCode).HasColumnName("role_code");
+        builder.Property(x => x.IsActive).HasColumnName("is_active");
+        builder.Property(x => x.CreatedAt).HasColumnName("created_at");
 
-        builder.Property(x => x.Login)
-            .HasColumnName("login")
-            .IsRequired();
-
-        builder.Property(x => x.PasswordHash)
-            .HasColumnName("password_hash")
-            .IsRequired();
-
-        builder.Property(x => x.FullName)
-            .HasColumnName("full_name")
-            .IsRequired();
-
-        builder.Property(x => x.RoleCode)
-            .HasColumnName("role_code")
-            .IsRequired();
-
-        builder.Property(x => x.IsActive)
-            .HasColumnName("is_active")
-            .HasDefaultValue(true);
-
-        builder.Property(x => x.CreatedAt)
-            .HasColumnName("created_at");
-
-        builder.HasIndex(x => x.Login)
-            .IsUnique();
+        builder.HasIndex(x => x.Login).IsUnique();
     }
 }
