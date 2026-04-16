@@ -36,6 +36,29 @@ public class ShiftsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("active")]
+    public async Task<ActionResult<ShiftDto?>> GetActive(CancellationToken cancellationToken)
+    {
+        var result = await _workShiftService.GetActiveShiftAsync(cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("report")]
+    public async Task<ActionResult<ShiftReportDto>> GetReport(
+        [FromQuery] DateTime? from,
+        [FromQuery] DateTime? to,
+        [FromQuery] int? userId,
+        CancellationToken cancellationToken)
+    {
+        var result = await _workShiftService.GetShiftReportAsync(
+            from,
+            to,
+            userId,
+            cancellationToken);
+
+        return Ok(result);
+    }
+
     [HttpPost("open")]
     public async Task<ActionResult<ShiftDto>> Open(
         [FromBody] OpenShiftDto request,
@@ -44,6 +67,7 @@ public class ShiftsController : ControllerBase
         var result = await _workShiftService.OpenShiftAsync(
             GetCurrentUserId(),
             request.Comment,
+            request.TakeoverIfNeeded,
             cancellationToken);
 
         return Ok(result);

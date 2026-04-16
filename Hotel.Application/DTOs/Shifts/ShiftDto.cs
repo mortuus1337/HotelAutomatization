@@ -14,6 +14,7 @@ public class ShiftDto
 public class OpenShiftDto
 {
     public string? Comment { get; set; }
+    public bool TakeoverIfNeeded { get; set; }
 }
 
 public class CloseShiftDto
