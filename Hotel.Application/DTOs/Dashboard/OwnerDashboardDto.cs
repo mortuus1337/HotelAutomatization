@@ -17,10 +17,49 @@ public class OwnerDashboardDto
     public int UpcomingDepartures { get; set; }
 
     public decimal OccupancyPercentNow { get; set; }
+    public FinanceSummaryDto Finance { get; set; } = new();
+    public DashboardPeriodComparisonDto PeriodComparison { get; set; } = new();
 
     public List<DashboardDailyLoadDto> DailyLoad { get; set; } = new();
     public List<ReservationSummaryDto> Reservations { get; set; } = new();
     public List<ArrivalDepartureDto> ArrivalsDepartures { get; set; } = new();
+}
+
+public class DashboardPeriodComparisonDto
+{
+    public DateTime PreviousFrom { get; set; }
+    public DateTime PreviousTo { get; set; }
+
+    public int ReservationsDelta { get; set; }
+    public decimal ReservationsDeltaPercent { get; set; }
+
+    public decimal TotalIncomeDelta { get; set; }
+    public decimal TotalIncomeDeltaPercent { get; set; }
+
+    public decimal ProfitDelta { get; set; }
+    public decimal ProfitDeltaPercent { get; set; }
+
+    public decimal AverageLoadPercentCurrent { get; set; }
+    public decimal AverageLoadPercentPrevious { get; set; }
+    public decimal AverageLoadDeltaPercentPoints { get; set; }
+}
+
+public class FinanceSummaryDto
+{
+    public decimal TotalIncome { get; set; }
+    public decimal RealizedIncome { get; set; }
+    public decimal BookedIncome { get; set; }
+    public decimal TotalExpenses { get; set; }
+    public decimal ProfitOrLoss { get; set; }
+
+    public List<FinanceBreakdownItemDto> IncomeBySource { get; set; } = new();
+    public List<FinanceBreakdownItemDto> ExpenseByCategory { get; set; } = new();
+}
+
+public class FinanceBreakdownItemDto
+{
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
 }
 
 public class DashboardDailyLoadDto

@@ -5,6 +5,7 @@ using Hotel.Application.Interfaces;
 using Hotel.Domain.Entities;
 using Hotel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Hotel.Infrastructure.Services;
 
@@ -17,10 +18,14 @@ public class WorkShiftService : IWorkShiftService
     private const string OperationCheckOut = "CheckOut";
 
     private readonly HotelDbContext _dbContext;
+    private readonly ILogger<WorkShiftService> _logger;
 
-    public WorkShiftService(HotelDbContext dbContext)
+    public WorkShiftService(
+        HotelDbContext dbContext,
+        ILogger<WorkShiftService> logger)
     {
         _dbContext = dbContext;
+        _logger = logger;
     }
 
     public async Task<ShiftDto> OpenShiftAsync(
@@ -71,6 +76,12 @@ public class WorkShiftService : IWorkShiftService
             }
 
             await transaction.CommitAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Open shift request is idempotent. Existing shift returned. ShiftId={ShiftId}, UserId={UserId}",
+                ownOpenShift.WorkShiftId,
+                currentUserId);
+
             return MapShift(ownOpenShift);
         }
 
@@ -104,6 +115,11 @@ public class WorkShiftService : IWorkShiftService
             }
 
             await _dbContext.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation(
+                "Shift takeover executed. NewUserId={UserId}, ClosedForeignShifts={ClosedCount}",
+                currentUserId,
+                foreignOpenShifts.Count);
         }
 
         var shift = new WorkShift
@@ -117,6 +133,12 @@ public class WorkShiftService : IWorkShiftService
         _dbContext.WorkShifts.Add(shift);
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Shift opened. ShiftId={ShiftId}, UserId={UserId}, Takeover={TakeoverIfNeeded}",
+            shift.WorkShiftId,
+            currentUserId,
+            takeoverIfNeeded);
 
         return new ShiftDto
         {
@@ -180,6 +202,12 @@ public class WorkShiftService : IWorkShiftService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Shift closed. ShiftId={ShiftId}, UserId={UserId}, DuplicatesClosed={DuplicatesClosed}",
+            targetShift.WorkShiftId,
+            currentUserId,
+            duplicates.Count);
 
         return MapShift(targetShift);
     }

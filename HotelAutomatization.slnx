@@ -3,4 +3,5 @@
   <Project Path="Hotel.Application/Hotel.Application.csproj" Id="278e2557-0ba1-4d18-9a80-a4a77b4f0712" />
   <Project Path="Hotel.Domain/Hotel.Domain.csproj" Id="910f242b-a910-49cd-89c8-ea2b81894bf8" />
   <Project Path="Hotel.Infrastructure/Hotel.Infrastructure.csproj" Id="de9f5e6a-bcc5-4751-90f8-477816f73b5f" />
+  <Project Path="Hotel.Tests/Hotel.Tests.csproj" />
 </Solution>

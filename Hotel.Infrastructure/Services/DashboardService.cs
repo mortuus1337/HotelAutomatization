@@ -9,7 +9,19 @@ namespace Hotel.Infrastructure.Services;
 
 public class DashboardService : IDashboardService
 {
+    private const decimal HousekeepingCostPerRoomNight = 350m;
+    private const decimal UtilitiesCostPerActiveRoomPerDay = 120m;
+
     private readonly HotelDbContext _dbContext;
+    
+    private sealed class PeriodSnapshot
+    {
+        public int ReservationsCount { get; set; }
+        public decimal TotalIncome { get; set; }
+        public decimal TotalExpenses { get; set; }
+        public decimal ProfitOrLoss { get; set; }
+        public decimal AverageLoadPercent { get; set; }
+    }
 
     public DashboardService(HotelDbContext dbContext)
     {
@@ -192,7 +204,267 @@ public class DashboardService : IDashboardService
             });
         }
 
+        var financeStays = await _dbContext.Stays
+            .AsNoTracking()
+            .Where(x =>
+                activeRoomIds.Contains(x.RoomId) &&
+                x.Status != StayStatuses.Cancelled &&
+                x.PlannedCheckin < endDateExclusive &&
+                x.PlannedCheckout > startDate)
+            .Select(x => new
+            {
+                x.StayId,
+                x.Status,
+                x.RoomId,
+                x.ReservationId,
+                x.PlannedCheckin,
+                x.PlannedCheckout,
+                BasePrice = x.Room.RoomType.BasePrice,
+                ReservationSource = x.Reservation != null ? x.Reservation.Source : null,
+                ReservationRoomPrice = x.Reservation != null
+                    ? x.Reservation.ReservationRooms
+                        .Where(rr => rr.RoomId == x.RoomId)
+                        .Select(rr => rr.PricePerNight)
+                        .FirstOrDefault()
+                    : null
+            })
+            .ToListAsync(cancellationToken);
+
+        var incomeBySource = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        decimal realizedIncome = 0m;
+        decimal bookedIncome = 0m;
+        var totalRoomNights = 0;
+
+        foreach (var stay in financeStays)
+        {
+            var overlapStart = stay.PlannedCheckin > startDate ? stay.PlannedCheckin : startDate;
+            var overlapEndExclusive = stay.PlannedCheckout < endDateExclusive ? stay.PlannedCheckout : endDateExclusive;
+            var nights = overlapEndExclusive.DayNumber - overlapStart.DayNumber;
+
+            if (nights <= 0)
+                continue;
+
+            totalRoomNights += nights;
+
+            var nightlyRate = stay.ReservationRoomPrice ?? stay.BasePrice;
+            var stayIncome = nightlyRate * nights;
+
+            var sourceName = stay.ReservationId.HasValue
+                ? (string.IsNullOrWhiteSpace(stay.ReservationSource) ? "Reservation" : stay.ReservationSource.Trim())
+                : "FrontDeskCheckIn";
+
+            if (!incomeBySource.ContainsKey(sourceName))
+                incomeBySource[sourceName] = 0m;
+            incomeBySource[sourceName] += stayIncome;
+
+            if (stay.Status == StayStatuses.Planned)
+                bookedIncome += stayIncome;
+            else
+                realizedIncome += stayIncome;
+        }
+
+        var periodDays = (to.Date - from.Date).Days + 1;
+        var housekeepingExpense = totalRoomNights * HousekeepingCostPerRoomNight;
+        var utilitiesExpense = activeRooms.Count * periodDays * UtilitiesCostPerActiveRoomPerDay;
+        var totalExpenses = housekeepingExpense + utilitiesExpense;
+        var totalIncome = realizedIncome + bookedIncome;
+
+        result.Finance = new FinanceSummaryDto
+        {
+            TotalIncome = Math.Round(totalIncome, 2),
+            RealizedIncome = Math.Round(realizedIncome, 2),
+            BookedIncome = Math.Round(bookedIncome, 2),
+            TotalExpenses = Math.Round(totalExpenses, 2),
+            ProfitOrLoss = Math.Round(totalIncome - totalExpenses, 2),
+            IncomeBySource = incomeBySource
+                .OrderByDescending(x => x.Value)
+                .Select(x => new FinanceBreakdownItemDto
+                {
+                    Name = x.Key,
+                    Amount = Math.Round(x.Value, 2)
+                })
+                .ToList(),
+            ExpenseByCategory = new List<FinanceBreakdownItemDto>
+            {
+                new()
+                {
+                    Name = "Housekeeping",
+                    Amount = Math.Round(housekeepingExpense, 2)
+                },
+                new()
+                {
+                    Name = "Utilities",
+                    Amount = Math.Round(utilitiesExpense, 2)
+                }
+            }
+        };
+
+        var previousToDate = from.Date.AddDays(-1);
+        var previousFromDate = previousToDate.AddDays(-periodDays + 1);
+        var previousSnapshot = await BuildPeriodSnapshotAsync(
+            DateOnly.FromDateTime(previousFromDate),
+            DateOnly.FromDateTime(previousToDate.AddDays(1)),
+            activeRoomIds,
+            activeRooms.Count,
+            cancellationToken);
+
+        var currentAverageLoadPercent = activeRooms.Count == 0 || result.DailyLoad.Count == 0
+            ? 0m
+            : Math.Round(result.DailyLoad
+                .Average(x => (x.OccupiedRooms + x.ReservedRooms) * 100m / activeRooms.Count), 2);
+
+        result.PeriodComparison = new DashboardPeriodComparisonDto
+        {
+            PreviousFrom = previousFromDate,
+            PreviousTo = previousToDate,
+            ReservationsDelta = result.ReservationsInPeriod - previousSnapshot.ReservationsCount,
+            ReservationsDeltaPercent = CalculateDeltaPercent(result.ReservationsInPeriod, previousSnapshot.ReservationsCount),
+            TotalIncomeDelta = Math.Round(result.Finance.TotalIncome - previousSnapshot.TotalIncome, 2),
+            TotalIncomeDeltaPercent = CalculateDeltaPercent(result.Finance.TotalIncome, previousSnapshot.TotalIncome),
+            ProfitDelta = Math.Round(result.Finance.ProfitOrLoss - previousSnapshot.ProfitOrLoss, 2),
+            ProfitDeltaPercent = CalculateDeltaPercent(result.Finance.ProfitOrLoss, previousSnapshot.ProfitOrLoss),
+            AverageLoadPercentCurrent = currentAverageLoadPercent,
+            AverageLoadPercentPrevious = previousSnapshot.AverageLoadPercent,
+            AverageLoadDeltaPercentPoints = Math.Round(currentAverageLoadPercent - previousSnapshot.AverageLoadPercent, 2)
+        };
+
         return result;
+    }
+
+    private async Task<PeriodSnapshot> BuildPeriodSnapshotAsync(
+        DateOnly startDate,
+        DateOnly endDateExclusive,
+        HashSet<int> activeRoomIds,
+        int activeRoomsCount,
+        CancellationToken cancellationToken)
+    {
+        var stays = await _dbContext.Stays
+            .AsNoTracking()
+            .Where(x =>
+                activeRoomIds.Contains(x.RoomId) &&
+                x.Status != StayStatuses.Cancelled &&
+                x.PlannedCheckin < endDateExclusive &&
+                x.PlannedCheckout > startDate)
+            .Select(x => new
+            {
+                x.StayId,
+                x.RoomId,
+                x.PlannedCheckin,
+                x.PlannedCheckout,
+                x.Status
+            })
+            .ToListAsync(cancellationToken);
+
+        var reservationRooms = await _dbContext.ReservationRooms
+            .AsNoTracking()
+            .Where(x =>
+                activeRoomIds.Contains(x.RoomId) &&
+                (x.Reservation.Status == ReservationStatuses.Created ||
+                 x.Reservation.Status == ReservationStatuses.Confirmed) &&
+                x.Reservation.PlannedCheckin < endDateExclusive &&
+                x.Reservation.PlannedCheckout > startDate)
+            .Select(x => new
+            {
+                x.ReservationId,
+                x.RoomId,
+                x.Reservation.PlannedCheckin,
+                x.Reservation.PlannedCheckout
+            })
+            .ToListAsync(cancellationToken);
+
+        var financeStays = await _dbContext.Stays
+            .AsNoTracking()
+            .Where(x =>
+                activeRoomIds.Contains(x.RoomId) &&
+                x.Status != StayStatuses.Cancelled &&
+                x.PlannedCheckin < endDateExclusive &&
+                x.PlannedCheckout > startDate)
+            .Select(x => new
+            {
+                x.Status,
+                x.RoomId,
+                x.ReservationId,
+                x.PlannedCheckin,
+                x.PlannedCheckout,
+                BasePrice = x.Room.RoomType.BasePrice,
+                ReservationRoomPrice = x.Reservation != null
+                    ? x.Reservation.ReservationRooms
+                        .Where(rr => rr.RoomId == x.RoomId)
+                        .Select(rr => rr.PricePerNight)
+                        .FirstOrDefault()
+                    : null
+            })
+            .ToListAsync(cancellationToken);
+
+        decimal realizedIncome = 0m;
+        decimal bookedIncome = 0m;
+        var totalRoomNights = 0;
+
+        foreach (var stay in financeStays)
+        {
+            var overlapStart = stay.PlannedCheckin > startDate ? stay.PlannedCheckin : startDate;
+            var overlapEndExclusive = stay.PlannedCheckout < endDateExclusive ? stay.PlannedCheckout : endDateExclusive;
+            var nights = overlapEndExclusive.DayNumber - overlapStart.DayNumber;
+
+            if (nights <= 0)
+                continue;
+
+            totalRoomNights += nights;
+
+            var nightlyRate = stay.ReservationRoomPrice ?? stay.BasePrice;
+            var stayIncome = nightlyRate * nights;
+
+            if (stay.Status == StayStatuses.Planned)
+                bookedIncome += stayIncome;
+            else
+                realizedIncome += stayIncome;
+        }
+
+        var periodDays = endDateExclusive.DayNumber - startDate.DayNumber;
+        decimal totalLoadPercent = 0m;
+
+        for (var date = startDate; date < endDateExclusive; date = date.AddDays(1))
+        {
+            var occupiedRooms = stays
+                .Where(x => date >= x.PlannedCheckin && date < x.PlannedCheckout)
+                .Select(x => x.RoomId)
+                .Distinct()
+                .ToHashSet();
+
+            var reservedRooms = reservationRooms
+                .Where(x => date >= x.PlannedCheckin && date < x.PlannedCheckout)
+                .Select(x => x.RoomId)
+                .Distinct()
+                .Where(roomId => !occupiedRooms.Contains(roomId))
+                .Count();
+
+            if (activeRoomsCount > 0)
+                totalLoadPercent += (occupiedRooms.Count + reservedRooms) * 100m / activeRoomsCount;
+        }
+
+        var housekeepingExpense = totalRoomNights * HousekeepingCostPerRoomNight;
+        var utilitiesExpense = activeRoomsCount * periodDays * UtilitiesCostPerActiveRoomPerDay;
+        var totalExpenses = housekeepingExpense + utilitiesExpense;
+        var totalIncome = realizedIncome + bookedIncome;
+
+        return new PeriodSnapshot
+        {
+            ReservationsCount = reservationRooms.Select(x => x.ReservationId).Distinct().Count(),
+            TotalIncome = Math.Round(totalIncome, 2),
+            TotalExpenses = Math.Round(totalExpenses, 2),
+            ProfitOrLoss = Math.Round(totalIncome - totalExpenses, 2),
+            AverageLoadPercent = periodDays <= 0
+                ? 0m
+                : Math.Round(totalLoadPercent / periodDays, 2)
+        };
+    }
+
+    private static decimal CalculateDeltaPercent(decimal current, decimal previous)
+    {
+        if (previous == 0m)
+            return current == 0m ? 0m : 100m;
+
+        return Math.Round((current - previous) * 100m / Math.Abs(previous), 2);
     }
 
     private static void ValidateRange(DateTime from, DateTime to)

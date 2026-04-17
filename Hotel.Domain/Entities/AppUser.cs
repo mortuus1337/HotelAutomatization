@@ -17,4 +17,5 @@ public class AppUser
     public ICollection<Reservation> CreatedReservations { get; set; } = new List<Reservation>();
     public ICollection<Stay> CreatedStays { get; set; } = new List<Stay>();
     public ICollection<StayOperation> StayOperations { get; set; } = new List<StayOperation>();
+    public ICollection<GeneratedDocument> GeneratedDocuments { get; set; } = new List<GeneratedDocument>();
 }

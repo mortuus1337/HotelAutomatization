@@ -3,6 +3,7 @@ using Hotel.Application.DTOs.Auth;
 using Hotel.Application.Interfaces;
 using Hotel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Hotel.Infrastructure.Services;
 
@@ -11,15 +12,18 @@ public class AuthService : IAuthService
     private readonly HotelDbContext _dbContext;
     private readonly ITokenService _tokenService;
     private readonly IPasswordService _passwordService;
+    private readonly ILogger<AuthService> _logger;
 
     public AuthService(
         HotelDbContext dbContext,
         ITokenService tokenService,
-        IPasswordService passwordService)
+        IPasswordService passwordService,
+        ILogger<AuthService> logger)
     {
         _dbContext = dbContext;
         _tokenService = tokenService;
         _passwordService = passwordService;
+        _logger = logger;
     }
 
     public async Task<LoginResponseDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
@@ -52,6 +56,12 @@ public class AuthService : IAuthService
         }
 
         var token = _tokenService.CreateToken(user);
+
+        _logger.LogInformation(
+            "User login succeeded. UserId={UserId}, Login={Login}, Role={RoleCode}",
+            user.UserId,
+            user.Login,
+            user.RoleCode);
 
         return new LoginResponseDto
         {

@@ -5,6 +5,7 @@ using Hotel.Domain.Constants;
 using Hotel.Domain.Entities;
 using Hotel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Hotel.Infrastructure.Services;
 
@@ -12,13 +13,16 @@ public class ReservationService : IReservationService
 {
     private readonly HotelDbContext _dbContext;
     private readonly IRoomAvailabilityService _roomAvailabilityService;
+    private readonly ILogger<ReservationService> _logger;
 
     public ReservationService(
         HotelDbContext dbContext,
-        IRoomAvailabilityService roomAvailabilityService)
+        IRoomAvailabilityService roomAvailabilityService,
+        ILogger<ReservationService> logger)
     {
         _dbContext = dbContext;
         _roomAvailabilityService = roomAvailabilityService;
+        _logger = logger;
     }
 
     public async Task<List<ReservationListItemDto>> GetAllAsync(CancellationToken cancellationToken = default)
@@ -147,6 +151,13 @@ public class ReservationService : IReservationService
                 .ThenInclude(x => x.Room)
             .FirstAsync(x => x.ReservationId == reservation.ReservationId, cancellationToken);
 
+        _logger.LogInformation(
+            "Reservation created. ReservationId={ReservationId}, UserId={UserId}, Rooms={RoomsCount}, TotalPrice={TotalPrice}",
+            reservation.ReservationId,
+            currentUserId,
+            reservationRooms.Count,
+            reservation.TotalPrice);
+
         return MapReservation(createdReservation);
     }
 
@@ -167,6 +178,11 @@ public class ReservationService : IReservationService
         reservation.Status = ReservationStatuses.Confirmed;
         await _dbContext.SaveChangesAsync(cancellationToken);
 
+        _logger.LogInformation(
+            "Reservation confirmed. ReservationId={ReservationId}, Status={Status}",
+            reservation.ReservationId,
+            reservation.Status);
+
         return MapReservation(reservation);
     }
 
@@ -186,6 +202,11 @@ public class ReservationService : IReservationService
 
         reservation.Status = ReservationStatuses.Cancelled;
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation(
+            "Reservation canceled. ReservationId={ReservationId}, Status={Status}",
+            reservation.ReservationId,
+            reservation.Status);
 
         return MapReservation(reservation);
     }

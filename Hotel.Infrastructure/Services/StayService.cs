@@ -5,6 +5,7 @@ using Hotel.Domain.Constants;
 using Hotel.Domain.Entities;
 using Hotel.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Hotel.Infrastructure.Services;
 
@@ -16,13 +17,16 @@ public class StayService : IStayService
 
     private readonly HotelDbContext _dbContext;
     private readonly IRoomAvailabilityService _roomAvailabilityService;
+    private readonly ILogger<StayService> _logger;
 
     public StayService(
         HotelDbContext dbContext,
-        IRoomAvailabilityService roomAvailabilityService)
+        IRoomAvailabilityService roomAvailabilityService,
+        ILogger<StayService> logger)
     {
         _dbContext = dbContext;
         _roomAvailabilityService = roomAvailabilityService;
+        _logger = logger;
     }
 
     public async Task<List<CurrentStayDto>> GetCurrentAsync(CancellationToken cancellationToken = default)
@@ -193,6 +197,13 @@ public class StayService : IStayService
             request.Comment,
             cancellationToken);
 
+        _logger.LogInformation(
+            "Stay check-in completed. StayId={StayId}, RoomId={RoomId}, UserId={UserId}, Guests={GuestsCount}",
+            stay.StayId,
+            stay.RoomId,
+            currentUserId,
+            distinctGuestIds.Count);
+
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }
 
@@ -252,6 +263,13 @@ public class StayService : IStayService
             request.Comment ?? reservation.Comment,
             cancellationToken);
 
+        _logger.LogInformation(
+            "Stay check-in by reservation completed. StayId={StayId}, ReservationId={ReservationId}, RoomId={RoomId}, UserId={UserId}",
+            stay.StayId,
+            reservation.ReservationId,
+            stay.RoomId,
+            currentUserId);
+
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }
 
@@ -284,6 +302,13 @@ public class StayService : IStayService
             OperationCheckOut,
             request.Comment,
             cancellationToken);
+
+        _logger.LogInformation(
+            "Stay check-out completed. StayId={StayId}, RoomId={RoomId}, UserId={UserId}, ActualCheckout={ActualCheckout}",
+            stay.StayId,
+            stay.RoomId,
+            currentUserId,
+            stay.ActualCheckout);
 
         return await GetByIdAsync(stay.StayId, cancellationToken);
     }

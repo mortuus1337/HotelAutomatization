@@ -21,6 +21,7 @@ public class HotelDbContext : DbContext
     public DbSet<StayGuest> StayGuests => Set<StayGuest>();
     public DbSet<StayOperation> StayOperations => Set<StayOperation>();
     public DbSet<WorkShift> WorkShifts => Set<WorkShift>();
+    public DbSet<GeneratedDocument> GeneratedDocuments => Set<GeneratedDocument>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

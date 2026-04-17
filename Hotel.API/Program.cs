@@ -3,11 +3,40 @@ using Hotel.API.Middleware;
 using Hotel.Infrastructure;
 using Hotel.Infrastructure.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services
+    .AddControllers()
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var errors = context.ModelState
+                .Where(x => x.Value?.Errors.Count > 0)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x.Value!.Errors
+                        .Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage)
+                            ? "Некорректное значение."
+                            : e.ErrorMessage)
+                        .ToArray());
+
+            var response = new ApiErrorResponse
+            {
+                Code = "validation_error",
+                Message = "Ошибка валидации входных данных.",
+                Status = StatusCodes.Status400BadRequest,
+                TraceId = context.HttpContext.TraceIdentifier,
+                Timestamp = DateTimeOffset.UtcNow,
+                Errors = errors
+            };
+
+            return new BadRequestObjectResult(response);
+        };
+    });
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();

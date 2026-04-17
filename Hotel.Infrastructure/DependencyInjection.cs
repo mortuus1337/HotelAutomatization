@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.AddScoped<IWorkShiftService, WorkShiftService>();
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ICalendarService, CalendarService>();
+        services.AddScoped<IDocumentService, DocumentService>();
 
         return services;
     }

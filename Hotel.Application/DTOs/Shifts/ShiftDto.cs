@@ -1,4 +1,6 @@
-﻿namespace Hotel.Application.DTOs.Shifts;
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace Hotel.Application.DTOs.Shifts;
 
 public class ShiftDto
 {
@@ -13,11 +15,14 @@ public class ShiftDto
 
 public class OpenShiftDto
 {
+    [MaxLength(500, ErrorMessage = "Комментарий не должен превышать 500 символов.")]
     public string? Comment { get; set; }
+
     public bool TakeoverIfNeeded { get; set; }
 }
 
 public class CloseShiftDto
 {
+    [MaxLength(500, ErrorMessage = "Комментарий не должен превышать 500 символов.")]
     public string? Comment { get; set; }
 }
