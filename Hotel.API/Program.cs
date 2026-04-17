@@ -2,11 +2,14 @@ using System.Text;
 using Hotel.API.Middleware;
 using Hotel.Infrastructure;
 using Hotel.Infrastructure.Auth;
+using Hotel.Infrastructure.Seeding;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.Services
     .AddControllers()
@@ -20,14 +23,14 @@ builder.Services
                     x => x.Key,
                     x => x.Value!.Errors
                         .Select(e => string.IsNullOrWhiteSpace(e.ErrorMessage)
-                            ? "Некорректное значение."
+                            ? "Invalid value."
                             : e.ErrorMessage)
                         .ToArray());
 
             var response = new ApiErrorResponse
             {
                 Code = "validation_error",
-                Message = "Ошибка валидации входных данных.",
+                Message = "Input validation failed.",
                 Status = StatusCodes.Status400BadRequest,
                 TraceId = context.HttpContext.TraceIdentifier,
                 Timestamp = DateTimeOffset.UtcNow,
@@ -63,10 +66,10 @@ var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtSettings = jwtSection.Get<JwtSettings>() ?? new JwtSettings();
 
 if (string.IsNullOrWhiteSpace(jwtSettings.SecretKey))
-    throw new InvalidOperationException("Jwt:SecretKey не настроен.");
+    throw new InvalidOperationException("Jwt:SecretKey is not configured.");
 
 if (jwtSettings.SecretKey.Length < 32)
-    throw new InvalidOperationException("Jwt:SecretKey должен быть не короче 32 символов.");
+    throw new InvalidOperationException("Jwt:SecretKey must be at least 32 characters.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -105,5 +108,20 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+if (app.Configuration.GetValue("Seeding:Enabled", false))
+{
+    try
+    {
+        using var scope = app.Services.CreateScope();
+        var seeder = scope.ServiceProvider.GetRequiredService<DevDataSeeder>();
+        await seeder.SeedAsync();
+        app.Logger.LogInformation("Dev data seeding completed successfully.");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Dev data seeding failed. Application startup continues.");
+    }
+}
 
 app.Run();

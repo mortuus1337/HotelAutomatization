@@ -249,9 +249,20 @@ public class DashboardService : IDashboardService
             var nightlyRate = stay.ReservationRoomPrice ?? stay.BasePrice;
             var stayIncome = nightlyRate * nights;
 
-            var sourceName = stay.ReservationId.HasValue
+            var rawSourceName = stay.ReservationId.HasValue
                 ? (string.IsNullOrWhiteSpace(stay.ReservationSource) ? "Reservation" : stay.ReservationSource.Trim())
                 : "FrontDeskCheckIn";
+
+            var sourceName = NormalizeIncomeSource(rawSourceName, stay.ReservationId.HasValue);
+            if (sourceName is null)
+            {
+                if (stay.Status == StayStatuses.Planned)
+                    bookedIncome += stayIncome;
+                else
+                    realizedIncome += stayIncome;
+
+                continue;
+            }
 
             if (!incomeBySource.ContainsKey(sourceName))
                 incomeBySource[sourceName] = 0m;
@@ -288,12 +299,12 @@ public class DashboardService : IDashboardService
             {
                 new()
                 {
-                    Name = "Housekeeping",
+                    Name = "Уборка и обслуживание номеров",
                     Amount = Math.Round(housekeepingExpense, 2)
                 },
                 new()
                 {
-                    Name = "Utilities",
+                    Name = "Коммунальные услуги",
                     Amount = Math.Round(utilitiesExpense, 2)
                 }
             }
@@ -480,5 +491,62 @@ public class DashboardService : IDashboardService
 
         if ((to.Date - from.Date).TotalDays > 366)
             throw new ValidationException("Период не должен превышать 366 дней.");
+    }
+
+    private static string? NormalizeIncomeSource(string rawSource, bool isReservationSource)
+    {
+        var normalized = rawSource.Trim().ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(normalized))
+            return isReservationSource ? "Прочие источники" : "Прямое заселение (стойка)";
+
+        if (IsTechnicalSource(normalized))
+            return null;
+
+        if (normalized.Contains("frontdeskcheckin")
+            || normalized.Contains("walkin")
+            || normalized.Contains("front desk checkin"))
+            return "Прямое заселение (стойка)";
+
+        if (normalized.Contains("reception")
+            || normalized.Contains("ресепш")
+            || normalized.Contains("стойк")
+            || normalized == "frontdesk")
+            return "Стойка регистрации";
+
+        if (normalized.Contains("phone")
+            || normalized.Contains("телефон")
+            || normalized.Contains("call"))
+            return "Телефонные бронирования";
+
+        if (normalized.Contains("website")
+            || normalized.Contains("site")
+            || normalized.Contains("сайт")
+            || normalized.Contains("web"))
+            return "Сайт гостиницы";
+
+        if (normalized.Contains("ota")
+            || normalized.Contains("booking")
+            || normalized.Contains("aggregator")
+            || normalized.Contains("agoda")
+            || normalized.Contains("ostrovok")
+            || normalized.Contains("expedia")
+            || normalized.Contains("travel"))
+            return "Онлайн-агрегаторы (OTA)";
+
+        if (normalized.Contains("reservation"))
+            return "Прочие источники";
+
+        return "Прочие источники";
+    }
+
+    private static bool IsTechnicalSource(string normalizedSource)
+    {
+        return normalizedSource is "qa" or "test" or "autotest" or "demo" or "debug" or "seed"
+            || normalizedSource.StartsWith("test_")
+            || normalizedSource.StartsWith("qa_")
+            || normalizedSource.Contains("seed")
+            || normalizedSource.Contains("dummy")
+            || normalizedSource.Contains("mock");
     }
 }

@@ -1,6 +1,7 @@
 ﻿using Hotel.Application.Interfaces;
 using Hotel.Infrastructure.Auth;
 using Hotel.Infrastructure.Persistence;
+using Hotel.Infrastructure.Seeding;
 using Hotel.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -35,6 +36,7 @@ public static class DependencyInjection
         services.AddScoped<IDashboardService, DashboardService>();
         services.AddScoped<ICalendarService, CalendarService>();
         services.AddScoped<IDocumentService, DocumentService>();
+        services.AddScoped<DevDataSeeder>();
 
         return services;
     }
